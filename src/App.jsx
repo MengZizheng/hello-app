@@ -12,8 +12,6 @@ import {
 } from 'antd-mobile'
 import {
   AddOutline,
-  DownloadOutline,
-  RetryOutline,
 } from 'antd-mobile-icons'
 import './App.css'
 
@@ -291,7 +289,7 @@ function App() {
                 color="primary"
                 onClick={handleDownload}
               >
-                <DownloadOutline /> 下载
+                ⬇️ 下载
               </Button>
               <Button
                 block
@@ -299,7 +297,7 @@ function App() {
                 color="default"
                 onClick={handleRegenerate}
               >
-                <RetryOutline /> 重新生成
+                🔄 重新生成
               </Button>
             </Space>
           </Space>
