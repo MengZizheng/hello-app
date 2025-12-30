@@ -1,5 +1,3 @@
-const fetch = require('node-fetch');
-
 // API 配置
 const API_KEY = process.env.NANO_BANANA_API_KEY || 'sk-ioel5HwR6nA0CbeeOH91lN239XvDrKUPoZqy08dJdrJ0aehF';
 const API_URL = 'https://api.apimart.ai/v1/images/generations';
