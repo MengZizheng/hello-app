@@ -17,7 +17,7 @@ function App() {
         />
         {name && (
           <div className="greeting">
-            你好，<span className="name">{name}</span>！
+            hello，<span className="name">{name}</span>！
           </div>
         )}
       </div>
