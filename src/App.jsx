@@ -1,21 +1,5 @@
 import { useState, useRef } from 'react'
-import {
-  Button,
-  Radio,
-  ImageUploader,
-  Toast,
-  Swiper,
-  DotLoading,
-  Card,
-  Space,
-  Modal,
-} from 'antd-mobile'
-import {
-  AddOutline,
-} from 'antd-mobile-icons'
-import './App.css'
 
-// Chiikawa 主题等待文案
 const WAITING_MESSAGES = [
   '正在除草中...',
   '正在阅读除草指南...',
@@ -31,41 +15,42 @@ const WAITING_MESSAGES = [
 function App() {
   const [character, setCharacter] = useState('吉伊')
   const [size, setSize] = useState('16:9')
-  const [referenceImage, setReferenceImage] = useState([])
+  const [referenceImage, setReferenceImage] = useState(null)
+  const [previewUrl, setPreviewUrl] = useState(null)
   const [status, setStatus] = useState('idle')
   const [taskId, setTaskId] = useState(null)
   const [resultImage, setResultImage] = useState(null)
   const [waitingMessage, setWaitingMessage] = useState('')
+  const [errorMessage, setErrorMessage] = useState('')
   const fileInputRef = useRef(null)
 
-  const characters = [
-    { label: '吉伊', value: '吉伊' },
-    { label: '小八', value: '小八' },
-    { label: '乌萨奇', value: '乌萨奇' },
-  ]
+  const characters = ['吉伊', '小八', '乌萨奇']
+  const sizes = ['16:9', '9:16', '1:1']
 
-  const sizes = [
-    { label: '16:9', value: '16:9' },
-    { label: '9:16', value: '9:16' },
-    { label: '1:1', value: '1:1' },
-  ]
-
-  // 处理图片上传
-  const handleImageUpload = (files) => {
-    if (files.length > 0) {
-      setReferenceImage(files)
+  const handleFileChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setReferenceImage(file)
+      setPreviewUrl(URL.createObjectURL(file))
     }
   }
 
-  // 提交生成任务
+  const removeReference = () => {
+    setReferenceImage(null)
+    setPreviewUrl(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
   const handleSubmit = async () => {
     setStatus('submitting')
+    setErrorMessage('')
 
     try {
       let base64Image = null
-      if (referenceImage.length > 0) {
-        const file = referenceImage[0].originFile
-        base64Image = await fileToBase64(file)
+      if (referenceImage) {
+        base64Image = await fileToBase64(referenceImage)
       }
 
       const response = await fetch('/.netlify/functions/submit', {
@@ -92,11 +77,8 @@ function App() {
 
     } catch (error) {
       console.error('提交错误:', error)
-      Toast.show({
-        content: error.message,
-        icon: 'fail',
-      })
-      setStatus('idle')
+      setErrorMessage(error.message)
+      setStatus('error')
     }
   }
 
@@ -123,17 +105,10 @@ function App() {
           clearInterval(interval)
           setResultImage(data.imageUrl)
           setStatus('completed')
-          Toast.show({
-            content: '壁纸生成完成！',
-            icon: 'success',
-          })
         } else if (data.status === 'failed' || data.status === 'cancelled') {
           clearInterval(interval)
-          Toast.show({
-            content: data.failReason || '任务失败',
-            icon: 'fail',
-          })
-          setStatus('idle')
+          setErrorMessage(data.failReason || '任务失败')
+          setStatus('error')
         } else {
           setWaitingMessage(WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)])
         }
@@ -141,11 +116,8 @@ function App() {
       } catch (error) {
         clearInterval(interval)
         console.error('轮询错误:', error)
-        Toast.show({
-          content: error.message,
-          icon: 'fail',
-        })
-        setStatus('idle')
+        setErrorMessage(error.message)
+        setStatus('error')
       }
     }, 5000)
   }
@@ -154,6 +126,7 @@ function App() {
     setResultImage(null)
     setStatus('idle')
     setTaskId(null)
+    handleSubmit()
   }
 
   const handleDownload = async () => {
@@ -168,140 +141,172 @@ function App() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      Toast.show({ content: '下载成功', icon: 'success' })
     } catch (error) {
       window.open(resultImage, '_blank')
     }
   }
 
   return (
-    <div className="app-container">
-      {/* 头部 */}
-      <div className="header">
-        <h1 className="title">🌾 Chiikawa 壁纸生成器</h1>
-        <p className="subtitle">选择角色，一键生成专属壁纸</p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-pink-100 via-purple-50 to-blue-100 py-8 px-4">
+      <div className="max-w-md mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">🌾 Chiikawa 壁纸生成器</h1>
+          <p className="text-gray-600">选择角色，一键生成专属壁纸</p>
+        </div>
 
-      {/* 主内容区 */}
-      <div className="content">
-        {/* 输入表单 */}
-        {status === 'idle' && (
-          <Space direction="vertical" block style={{ '--gap': '16px' }}>
-            {/* 角色选择 */}
-            <Card title="选择角色">
-              <Radio.Group
-                value={character}
-                onChange={(val) => setCharacter(val)}
-                defaultValue="吉伊"
-              >
-                <Space direction="vertical">
+        {/* Main Card */}
+        <div className="bg-white rounded-2xl shadow-xl overflow-hidden">
+          {status === 'idle' && (
+            <div className="p-6 space-y-6">
+              {/* Character Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  选择角色
+                </label>
+                <div className="grid grid-cols-3 gap-3">
                   {characters.map((c) => (
-                    <Radio
-                      key={c.value}
-                      value={c.value}
-                      className="custom-radio"
+                    <button
+                      key={c}
+                      onClick={() => setCharacter(c)}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                        character === c
+                          ? 'bg-gradient-to-r from-pink-400 to-purple-400 text-white shadow-lg scale-105'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
                     >
-                      {c.label}
-                    </Radio>
+                      {c}
+                    </button>
                   ))}
-                </Space>
-              </Radio.Group>
-            </Card>
-
-            {/* 尺寸选择 */}
-            <Card title="选择尺寸">
-              <Radio.Group
-                value={size}
-                onChange={(val) => setSize(val)}
-              >
-                <Space direction="vertical">
-                  {sizes.map((s) => (
-                    <Radio
-                      key={s.value}
-                      value={s.value}
-                      className="custom-radio"
-                    >
-                      {s.label}
-                    </Radio>
-                  ))}
-                </Space>
-              </Radio.Group>
-            </Card>
-
-            {/* 参考图上传 */}
-            <Card title="参考图（可选）">
-              <ImageUploader
-                value={referenceImage}
-                onChange={handleImageUpload}
-                upload={() => Promise.resolve('')}
-                maxCount={1}
-                accept="image/*"
-              >
-                <div className="upload-trigger">
-                  <AddOutline fontSize={32} />
-                  <span>点击上传</span>
                 </div>
-              </ImageUploader>
-            </Card>
-
-            {/* 生成按钮 */}
-            <Button
-              block
-              size="large"
-              color="primary"
-              onClick={handleSubmit}
-            >
-              ✨ 生成壁纸
-            </Button>
-          </Space>
-        )}
-
-        {/* 处理中 */}
-        {(status === 'submitting' || status === 'processing') && (
-          <Card className="loading-card">
-            <div className="loading-content">
-              <DotLoading color="primary" />
-              <div className="loading-text">
-                {status === 'submitting' ? '正在提交任务...' : waitingMessage}
               </div>
-              <div className="loading-hint">
-                {status === 'processing' && '这可能需要 1-2 分钟，请耐心等待...'}
+
+              {/* Size Selection */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  选择尺寸
+                </label>
+                <div className="grid grid-cols-3 gap-3">
+                  {sizes.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSize(s)}
+                      className={`py-3 px-4 rounded-xl font-medium transition-all ${
+                        size === s
+                          ? 'bg-gradient-to-r from-blue-400 to-cyan-400 text-white shadow-lg scale-105'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Reference Image Upload */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  参考图（可选）
+                </label>
+                {previewUrl ? (
+                  <div className="relative">
+                    <img
+                      src={previewUrl}
+                      alt="参考图"
+                      className="w-full h-32 object-cover rounded-xl"
+                    />
+                    <button
+                      onClick={removeReference}
+                      className="absolute top-2 right-2 w-8 h-8 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center h-32 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-pink-400 hover:bg-pink-50 transition-all">
+                    <span className="text-4xl mb-2">📷</span>
+                    <span className="text-sm text-gray-500">点击上传参考图</span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* Generate Button */}
+              <button
+                onClick={handleSubmit}
+                className="w-full py-4 bg-gradient-to-r from-pink-400 via-purple-400 to-blue-400 text-white font-bold rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+              >
+                ✨ 生成壁纸
+              </button>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {(status === 'submitting' || status === 'processing') && (
+            <div className="p-12 text-center">
+              <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-pink-200 border-t-pink-500 mb-6"></div>
+              <p className="text-lg font-semibold text-gray-800 mb-2">
+                {status === 'submitting' ? '正在提交任务...' : waitingMessage}
+              </p>
+              {status === 'processing' && (
+                <p className="text-sm text-gray-500">这可能需要 1-2 分钟，请耐心等待...</p>
+              )}
+            </div>
+          )}
+
+          {/* Error State */}
+          {status === 'error' && (
+            <div className="p-12 text-center">
+              <div className="text-6xl mb-4">😢</div>
+              <p className="text-lg font-semibold text-red-600 mb-6">{errorMessage}</p>
+              <button
+                onClick={() => setStatus('idle')}
+                className="px-8 py-3 bg-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-300 transition-colors"
+              >
+                返回
+              </button>
+            </div>
+          )}
+
+          {/* Completed State */}
+          {status === 'completed' && resultImage && (
+            <div className="p-6 space-y-6">
+              <div className="text-center mb-4">
+                <p className="text-2xl font-bold text-gray-800">✨ 壁纸生成完成！</p>
+              </div>
+
+              <div className="rounded-xl overflow-hidden shadow-lg">
+                <img src={resultImage} alt="生成的壁纸" className="w-full" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleDownload}
+                  className="py-4 bg-gradient-to-r from-pink-400 to-purple-400 text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                >
+                  ⬇️ 下载
+                </button>
+                <button
+                  onClick={handleRegenerate}
+                  className="py-4 bg-gray-200 text-gray-700 font-bold rounded-xl hover:bg-gray-300 transition-colors"
+                >
+                  🔄 重新生成
+                </button>
               </div>
             </div>
-          </Card>
-        )}
+          )}
+        </div>
 
-        {/* 生成完成 */}
-        {status === 'completed' && resultImage && (
-          <Space direction="vertical" block style={{ '--gap': '16px' }}>
-            <Card title="生成结果">
-              <img
-                src={resultImage}
-                alt="生成的壁纸"
-                className="result-image"
-              />
-            </Card>
-
-            <Space direction="horizontal" block style={{ '--gap': '12px' }}>
-              <Button
-                block
-                size="large"
-                color="primary"
-                onClick={handleDownload}
-              >
-                ⬇️ 下载
-              </Button>
-              <Button
-                block
-                size="large"
-                color="default"
-                onClick={handleRegenerate}
-              >
-                🔄 重新生成
-              </Button>
-            </Space>
-          </Space>
-        )}
+        {/* Footer */}
+        <div className="text-center mt-8 text-sm text-gray-500">
+          Made with ❤️ using AI
+        </div>
       </div>
     </div>
   )
