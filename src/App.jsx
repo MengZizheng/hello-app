@@ -1,4 +1,20 @@
 import { useState, useRef } from 'react'
+import {
+  Button,
+  Radio,
+  ImageUploader,
+  Toast,
+  Swiper,
+  DotLoading,
+  Card,
+  Space,
+  Modal,
+} from 'antd-mobile'
+import {
+  AddOutline,
+  DownloadOutline,
+  RetryOutline,
+} from 'antd-mobile-icons'
 import './App.css'
 
 // Chiikawa 主题等待文案
@@ -17,50 +33,43 @@ const WAITING_MESSAGES = [
 function App() {
   const [character, setCharacter] = useState('吉伊')
   const [size, setSize] = useState('16:9')
-  const [referenceImage, setReferenceImage] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(null)
-  const [status, setStatus] = useState('idle') // idle, submitting, processing, completed, error
+  const [referenceImage, setReferenceImage] = useState([])
+  const [status, setStatus] = useState('idle')
   const [taskId, setTaskId] = useState(null)
   const [resultImage, setResultImage] = useState(null)
   const [waitingMessage, setWaitingMessage] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
   const fileInputRef = useRef(null)
 
-  // 角色选项
-  const characters = ['吉伊', '小八', '乌萨奇']
-  const sizes = ['16:9', '9:16', '1:1']
+  const characters = [
+    { label: '吉伊', value: '吉伊' },
+    { label: '小八', value: '小八' },
+    { label: '乌萨奇', value: '乌萨奇' },
+  ]
 
-  // 处理文件上传
-  const handleFileChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setReferenceImage(file)
-      setPreviewUrl(URL.createObjectURL(file))
-    }
-  }
+  const sizes = [
+    { label: '16:9', value: '16:9' },
+    { label: '9:16', value: '9:16' },
+    { label: '1:1', value: '1:1' },
+  ]
 
-  // 移除参考图
-  const removeReference = () => {
-    setReferenceImage(null)
-    setPreviewUrl(null)
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ''
+  // 处理图片上传
+  const handleImageUpload = (files) => {
+    if (files.length > 0) {
+      setReferenceImage(files)
     }
   }
 
   // 提交生成任务
   const handleSubmit = async () => {
     setStatus('submitting')
-    setErrorMessage('')
 
     try {
-      // 如果有参考图，转换为 base64
       let base64Image = null
-      if (referenceImage) {
-        base64Image = await fileToBase64(referenceImage)
+      if (referenceImage.length > 0) {
+        const file = referenceImage[0].originFile
+        base64Image = await fileToBase64(file)
       }
 
-      // 调用提交 API
       const response = await fetch('/.netlify/functions/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -81,17 +90,18 @@ function App() {
       setStatus('processing')
       setWaitingMessage(WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)])
 
-      // 开始轮询任务状态
       pollTaskStatus(data.taskId)
 
     } catch (error) {
       console.error('提交错误:', error)
-      setErrorMessage(error.message)
-      setStatus('error')
+      Toast.show({
+        content: error.message,
+        icon: 'fail',
+      })
+      setStatus('idle')
     }
   }
 
-  // 文件转 base64
   const fileToBase64 = (file) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -101,7 +111,6 @@ function App() {
     })
   }
 
-  // 轮询任务状态
   const pollTaskStatus = async (id) => {
     const interval = setInterval(async () => {
       try {
@@ -116,33 +125,39 @@ function App() {
           clearInterval(interval)
           setResultImage(data.imageUrl)
           setStatus('completed')
+          Toast.show({
+            content: '壁纸生成完成！',
+            icon: 'success',
+          })
         } else if (data.status === 'failed' || data.status === 'cancelled') {
           clearInterval(interval)
-          setErrorMessage(data.failReason || '任务失败')
-          setStatus('error')
+          Toast.show({
+            content: data.failReason || '任务失败',
+            icon: 'fail',
+          })
+          setStatus('idle')
         } else {
-          // 更新等待文案
           setWaitingMessage(WAITING_MESSAGES[Math.floor(Math.random() * WAITING_MESSAGES.length)])
         }
 
       } catch (error) {
         clearInterval(interval)
         console.error('轮询错误:', error)
-        setErrorMessage(error.message)
-        setStatus('error')
+        Toast.show({
+          content: error.message,
+          icon: 'fail',
+        })
+        setStatus('idle')
       }
-    }, 5000) // 每 5 秒查询一次
+    }, 5000)
   }
 
-  // 重新生成
   const handleRegenerate = () => {
     setResultImage(null)
     setStatus('idle')
     setTaskId(null)
-    handleSubmit()
   }
 
-  // 下载图片
   const handleDownload = async () => {
     try {
       const response = await fetch(resultImage)
@@ -155,130 +170,139 @@ function App() {
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
+      Toast.show({ content: '下载成功', icon: 'success' })
     } catch (error) {
-      console.error('下载失败:', error)
-      // 如果跨域失败，直接打开新标签页
       window.open(resultImage, '_blank')
     }
   }
 
   return (
-    <div className="container">
-      <div className="card">
+    <div className="app-container">
+      {/* 头部 */}
+      <div className="header">
         <h1 className="title">🌾 Chiikawa 壁纸生成器</h1>
+        <p className="subtitle">选择角色，一键生成专属壁纸</p>
+      </div>
 
-        {/* 输入界面 */}
+      {/* 主内容区 */}
+      <div className="content">
+        {/* 输入表单 */}
         {status === 'idle' && (
-          <div className="form">
+          <Space direction="vertical" block style={{ '--gap': '16px' }}>
             {/* 角色选择 */}
-            <div className="form-group">
-              <label className="label">选择角色</label>
-              <div className="character-grid">
-                {characters.map((c) => (
-                  <button
-                    key={c}
-                    className={`character-btn ${character === c ? 'active' : ''}`}
-                    onClick={() => setCharacter(c)}
-                  >
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Card title="选择角色">
+              <Radio.Group
+                value={character}
+                onChange={(val) => setCharacter(val)}
+                defaultValue="吉伊"
+              >
+                <Space direction="vertical">
+                  {characters.map((c) => (
+                    <Radio
+                      key={c.value}
+                      value={c.value}
+                      className="custom-radio"
+                    >
+                      {c.label}
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+            </Card>
 
             {/* 尺寸选择 */}
-            <div className="form-group">
-              <label className="label">选择尺寸</label>
-              <div className="size-grid">
-                {sizes.map((s) => (
-                  <button
-                    key={s}
-                    className={`size-btn ${size === s ? 'active' : ''}`}
-                    onClick={() => setSize(s)}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <Card title="选择尺寸">
+              <Radio.Group
+                value={size}
+                onChange={(val) => setSize(val)}
+              >
+                <Space direction="vertical">
+                  {sizes.map((s) => (
+                    <Radio
+                      key={s.value}
+                      value={s.value}
+                      className="custom-radio"
+                    >
+                      {s.label}
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+            </Card>
 
             {/* 参考图上传 */}
-            <div className="form-group">
-              <label className="label">参考图（可选）</label>
-              <div className="upload-area">
-                {previewUrl ? (
-                  <div className="preview">
-                    <img src={previewUrl} alt="参考图" />
-                    <button className="remove-btn" onClick={removeReference}>
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <label className="upload-btn">
-                    <span className="upload-icon">📷</span>
-                    <span>点击上传参考图</span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      style={{ display: 'none' }}
-                    />
-                  </label>
-                )}
-              </div>
-            </div>
+            <Card title="参考图（可选）">
+              <ImageUploader
+                value={referenceImage}
+                onChange={handleImageUpload}
+                upload={() => Promise.resolve('')}
+                maxCount={1}
+                accept="image/*"
+              >
+                <div className="upload-trigger">
+                  <AddOutline fontSize={32} />
+                  <span>点击上传</span>
+                </div>
+              </ImageUploader>
+            </Card>
 
             {/* 生成按钮 */}
-            <button className="generate-btn" onClick={handleSubmit}>
+            <Button
+              block
+              size="large"
+              color="primary"
+              onClick={handleSubmit}
+            >
               ✨ 生成壁纸
-            </button>
-          </div>
-        )}
-
-        {/* 提交中 */}
-        {status === 'submitting' && (
-          <div className="loading">
-            <div className="spinner"></div>
-            <p>正在提交任务...</p>
-          </div>
+            </Button>
+          </Space>
         )}
 
         {/* 处理中 */}
-        {status === 'processing' && (
-          <div className="loading">
-            <div className="spinner"></div>
-            <p className="waiting-text">{waitingMessage}</p>
-            <p className="hint">这可能需要 1-2 分钟，请耐心等待...</p>
-          </div>
+        {(status === 'submitting' || status === 'processing') && (
+          <Card className="loading-card">
+            <div className="loading-content">
+              <DotLoading color="primary" />
+              <div className="loading-text">
+                {status === 'submitting' ? '正在提交任务...' : waitingMessage}
+              </div>
+              <div className="loading-hint">
+                {status === 'processing' && '这可能需要 1-2 分钟，请耐心等待...'}
+              </div>
+            </div>
+          </Card>
         )}
 
-        {/* 错误 */}
-        {status === 'error' && (
-          <div className="error">
-            <p className="error-text">❌ {errorMessage}</p>
-            <button className="retry-btn" onClick={() => setStatus('idle')}>
-              返回
-            </button>
-          </div>
-        )}
-
-        {/* 完成 */}
+        {/* 生成完成 */}
         {status === 'completed' && resultImage && (
-          <div className="result">
-            <h2 className="result-title">✨ 壁纸生成完成！</h2>
-            <div className="result-image">
-              <img src={resultImage} alt="生成的壁纸" />
-            </div>
-            <div className="result-actions">
-              <button className="download-btn" onClick={handleDownload}>
-                ⬇️ 下载
-              </button>
-              <button className="regenerate-btn" onClick={handleRegenerate}>
-                🔄 重新生成
-              </button>
-            </div>
-          </div>
+          <Space direction="vertical" block style={{ '--gap': '16px' }}>
+            <Card title="生成结果">
+              <img
+                src={resultImage}
+                alt="生成的壁纸"
+                className="result-image"
+              />
+            </Card>
+
+            <Space direction="horizontal" block style={{ '--gap': '12px' }}>
+              <Button
+                block
+                size="large"
+                color="primary"
+                onClick={handleDownload}
+              >
+                <DownloadOutline /> 下载
+              </Button>
+              <Button
+                block
+                size="large"
+                color="default"
+                onClick={handleRegenerate}
+              >
+                <RetryOutline /> 重新生成
+              </Button>
+            </Space>
+          </Space>
         )}
       </div>
     </div>
